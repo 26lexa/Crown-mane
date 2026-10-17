@@ -1,0 +1,169 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Crown &amp; Mane – Book a Cut</title>
+<style>
+:root{--bg:#faf7f2;--card:#fff;--ink:#1c1a17;--mut:#6f6a62;--gold:#b8892b;--line:#e4ddd0}
+@media (prefers-color-scheme:dark){:root{--bg:#15130f;--card:#201d18;--ink:#f3eee4;--mut:#a39c8f;--gold:#d4a64a;--line:#35302a}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.4 Georgia,serif}
+main{max-width:520px;margin:0 auto;padding:20px 16px 40px}
+h1{margin:0;font-size:26px}h1 span{color:var(--gold)}
+.sub{color:var(--mut);font:14px system-ui,sans-serif;margin:2px 0 18px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:14px;margin-bottom:14px}
+h2{font-size:13px;text-transform:uppercase;letter-spacing:1.2px;color:var(--gold);margin:0 0 10px;font-family:system-ui,sans-serif}
+.opts{display:flex;flex-wrap:wrap;gap:8px;font-family:system-ui,sans-serif}
+.opt{padding:10px 12px;border:1px solid var(--line);border-radius:10px;background:var(--bg);color:var(--ink);font-size:14px;text-align:left}
+.opt.on{background:var(--ink);color:var(--bg);border-color:var(--ink)}
+.opt small{display:block;opacity:.7;font-size:12px}
+.opt:disabled{opacity:.3;text-decoration:line-through}
+input{width:100%;padding:12px;border:1px solid var(--line);border-radius:10px;background:var(--bg);color:var(--ink);font:16px system-ui,sans-serif;margin-bottom:8px}
+.go{width:100%;padding:14px;border:0;border-radius:12px;background:var(--gold);color:#1c1a17;font:600 16px system-ui,sans-serif}
+.go:disabled{opacity:.4}
+.msg{font:14px system-ui,sans-serif;margin-top:10px}
+.ok{border-color:var(--gold)}.err{color:#b3402f;font:14px system-ui,sans-serif}
+.mut{color:var(--mut);font:14px system-ui,sans-serif}
+.hide{display:none}
+.row{padding:10px 0;border-bottom:1px solid var(--line);display:flex;justify-content:space-between;gap:8px;font:14px system-ui,sans-serif}
+.row:last-child{border:0}
+.x{background:none;border:0;color:#b3402f;font-size:13px}
+.day{font:12px system-ui,sans-serif;text-transform:uppercase;letter-spacing:1px;color:var(--gold);margin:14px 0 2px}
+.av{width:44px;height:44px;border-radius:50%;object-fit:cover;background:var(--line);display:flex;align-items:center;justify-content:center;font:600 16px system-ui,sans-serif;color:var(--mut);flex:none}
+.bopt{display:flex;align-items:center;gap:10px}
+a{color:var(--gold)}
+.foot{text-align:center;margin-top:24px}
+.foot button{background:none;border:0;color:var(--mut);font:13px system-ui,sans-serif;text-decoration:underline}
+</style>
+</head>
+<body>
+<main>
+<h1>Crown <span>&amp;</span> Mane</h1>
+<p class="sub">Barbershop · Book your chair</p>
+
+<!-- CLIENT VIEW -->
+<div id="client">
+<div id="app" class="hide">
+<div class="card"><h2>1 · Service</h2><div class="opts" id="svc"></div></div>
+<div class="card"><h2>2 · Barber</h2><div class="opts" id="bar"></div></div>
+<div class="card"><h2>3 · Day &amp; time</h2><div class="opts" id="day" style="margin-bottom:10px"></div><div class="opts" id="time"></div></div>
+<div class="card"><h2>4 · Your details</h2>
+<input id="nm" placeholder="Your name" autocomplete="name">
+<input id="ph" placeholder="Phone number" inputmode="tel" autocomplete="tel">
+<button class="go" id="go" disabled>Confirm booking</button>
+<div class="err" id="err"></div></div>
+<div class="card ok hide" id="done"></div>
+</div>
+<p class="mut" id="load">Loading…</p>
+</div>
+
+<!-- OWNER VIEW -->
+<div id="owner" class="hide">
+<div id="login" class="card"><h2>Owner login</h2>
+<input id="em" type="email" placeholder="Email" autocomplete="username">
+<input id="pw" type="password" placeholder="Password" autocomplete="current-password">
+<button class="go" id="in">Log in</button><div class="err" id="lerr"></div></div>
+<div id="panel" class="hide"><div class="card">
+<div style="display:flex;justify-content:space-between;align-items:center"><h2 style="margin:0">Upcoming bookings</h2><button class="x" id="out" style="color:var(--mut)">Log out</button></div>
+<div id="list"></div></div>
+<div class="card"><h2>Barbers</h2><div id="blist"></div></div></div>
+</div>
+
+<div class="foot"><button id="swap">Owner login</button></div>
+</main>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
+<script>
+var SUPABASE_URL='https://voisxgcarntqbvmrlnam.supabase.co';
+var SUPABASE_KEY='sb_publishable_-FlLsohdwSkaT96enlsG8g_oes7pLp2';
+var TZ='Africa/Nairobi',DAY=864e5;
+var sb=supabase.createClient(SUPABASE_URL,SUPABASE_KEY);
+var shop,barbers=[],services=[],taken=[],S={svc:null,bar:null,day:null,time:null};
+function $(i){return document.getElementById(i)}
+function el(t,c,x){var e=document.createElement(t);if(c)e.className=c;if(x!=null)e.textContent=x;return e}
+function pad(n){return (n<10?'0':'')+n}
+function ymd(ms){return new Date(ms).toLocaleDateString('en-CA',{timeZone:TZ})}
+function days(){var o=[];for(var i=0;i<7;i++){var ms=Date.now()+i*DAY;o.push({k:ymd(ms),l:i==0?'Today':i==1?'Tomorrow':new Date(ms).toLocaleDateString('en',{weekday:'short',day:'numeric',timeZone:TZ})})}return o}
+function startMs(day,min){return Date.parse(day+'T'+pad(Math.floor(min/60))+':'+pad(min%60)+':00+03:00')}
+function fmt(min){var h=Math.floor(min/60),m=min%60;return (h%12||12)+':'+pad(m)+' '+(h<12?'AM':'PM')}
+function free(b,s,e){return !taken.some(function(t){return t.barber_id==b.id&&s<Date.parse(t.end_time)&&e>Date.parse(t.start_time)})}
+function freeBarber(s,e){if(S.bar&&S.bar!='any')return free(S.bar,s,e)?S.bar:null;return barbers.filter(function(b){return free(b,s,e)})[0]||null}
+function opt(t,sub,on,fn,dis){var b=el('button','opt'+(on?' on':''),t);if(sub)b.appendChild(el('small','',sub));b.disabled=!!dis;b.onclick=fn;return b}
+
+function avatar(b){if(b.photo_url){var i=el('img','av');i.src=b.photo_url;i.alt=b.name;return i}return el('div','av',(b.name.replace(/[^A-Za-z]/g,'').charAt(0)||'?').toUpperCase())}
+
+/* ---------- CLIENT ---------- */
+function render(){
+var a=$('svc');a.textContent='';services.forEach(function(s){a.appendChild(opt(s.name,s.minutes+' min',S.svc&&S.svc.id==s.id,function(){S.svc=s;S.time=null;render()}))});
+a=$('bar');a.textContent='';a.appendChild(opt('Any available','',S.bar=='any',function(){S.bar='any';S.time=null;render()}));
+barbers.forEach(function(b){var x=opt(b.name,'',S.bar&&S.bar.id==b.id,function(){S.bar=b;S.time=null;render()});x.textContent='';x.classList.add('bopt');x.appendChild(avatar(b));x.appendChild(el('span','',b.name));a.appendChild(x)});
+a=$('day');a.textContent='';days().forEach(function(d){a.appendChild(opt(d.l,'',S.day==d.k,function(){S.day=d.k;S.time=null;render()}))});
+a=$('time');a.textContent='';
+if(S.svc&&S.bar&&S.day){for(var m=shop.open_hour*60;m+S.svc.minutes<=shop.close_hour*60;m+=30){(function(m){var s=startMs(S.day,m),e=s+S.svc.minutes*60000;var ok=s>Date.now()+15*60000&&freeBarber(s,e);a.appendChild(opt(fmt(m),'',S.time==m,function(){S.time=m;render()},!ok))})(m)}}
+else a.appendChild(el('div','mut','Pick a service, barber and day to see free times.'));
+$('go').disabled=!(S.svc&&S.bar&&S.day&&S.time!=null&&$('nm').value.trim().length>1&&$('ph').value.replace(/\D/g,'').length>=9)}
+async function loadTaken(){var from=startMs(ymd(Date.now()),0);var r=await sb.rpc('taken_slots',{p_shop:shop.id,p_from:new Date(from).toISOString(),p_to:new Date(from+8*DAY).toISOString()});taken=r.data||[]}
+$('nm').oninput=render;$('ph').oninput=render;
+$('go').onclick=async function(){
+$('err').textContent='';$('go').disabled=true;
+var s=startMs(S.day,S.time),e=s+S.svc.minutes*60000;
+await loadTaken();var b=freeBarber(s,e);
+if(!b){$('err').textContent='Sorry, that time was just taken. Please pick another.';render();return}
+var name=$('nm').value.trim();
+var r=await sb.from('bookings').insert({shop_id:shop.id,barber_id:b.id,service_id:S.svc.id,client_name:name,client_phone:$('ph').value.trim(),start_time:new Date(s).toISOString(),end_time:new Date(e).toISOString()});
+if(r.error){await loadTaken();$('err').textContent=r.error.code=='23P01'?'Sorry, that time was just taken. Please pick another.':'Could not book. Please try again.';render();return}
+var d=$('done');d.classList.remove('hide');d.textContent='';
+d.appendChild(el('strong','','You’re booked, '+name+'!'));
+var p=el('div','mut',S.svc.name+' with '+b.name+' · '+new Date(s).toLocaleDateString('en',{weekday:'short',month:'short',day:'numeric',timeZone:TZ})+' at '+fmt(S.time));p.style.marginTop='6px';d.appendChild(p);
+S={svc:null,bar:null,day:null,time:null};$('nm').value='';$('ph').value='';await loadTaken();render();d.scrollIntoView({behavior:'smooth'})};
+
+/* ---------- OWNER ---------- */
+async function loadBookings(){
+var r=await sb.from('bookings').select('*, barbers(name), services(name)').eq('status','confirmed').gte('end_time',new Date().toISOString()).order('start_time');
+var l=$('list');l.textContent='';
+if(r.error){l.appendChild(el('div','mut','Could not load bookings.'));return}
+if(!r.data.length){l.appendChild(el('div','mut','No upcoming bookings.'));return}
+var last='';
+r.data.forEach(function(b){
+var d=new Date(b.start_time);var dl=d.toLocaleDateString('en',{weekday:'long',month:'short',day:'numeric',timeZone:TZ});
+if(dl!=last){l.appendChild(el('div','day',dl));last=dl}
+var row=el('div','row');var L=el('div');
+L.appendChild(el('div','',d.toLocaleTimeString('en',{hour:'numeric',minute:'2-digit',timeZone:TZ})+' · '+b.client_name+' · '+(b.services?b.services.name:'')));
+var sub=el('div','mut',(b.barbers?b.barbers.name:'')+' · ');var a=el('a','',b.client_phone);a.href='tel:'+b.client_phone.replace(/[^\d+]/g,'');sub.appendChild(a);L.appendChild(sub);
+var c=el('button','x','Cancel');c.onclick=async function(){if(!confirm('Cancel this booking?'))return;await sb.from('bookings').update({status:'cancelled'}).eq('id',b.id);loadBookings();loadTaken().then(render)};
+row.appendChild(L);row.appendChild(c);l.appendChild(row)})}
+async function uploadPhoto(b,file){
+var bmp=await createImageBitmap(file);var s=Math.min(bmp.width,bmp.height),N=480;
+var c=document.createElement('canvas');c.width=N;c.height=N;
+c.getContext('2d').drawImage(bmp,(bmp.width-s)/2,(bmp.height-s)/2,s,s,0,0,N,N);
+var blob=await new Promise(function(r){c.toBlob(r,'image/jpeg',0.85)});
+var path=b.id+'-'+Date.now()+'.jpg';
+var u=await sb.storage.from('barber-photos').upload(path,blob,{contentType:'image/jpeg'});if(u.error)throw u.error;
+var url=sb.storage.from('barber-photos').getPublicUrl(path).data.publicUrl;
+var r=await sb.from('barbers').update({photo_url:url}).eq('id',b.id);if(r.error)throw r.error;return url}
+function loadBarbers(){var l=$('blist');l.textContent='';barbers.forEach(function(b){
+var row=el('div','row');row.style.alignItems='center';var L=el('div','bopt');L.appendChild(avatar(b));L.appendChild(el('span','',b.name));
+var f=document.createElement('input');f.type='file';f.accept='image/*';f.className='hide';
+var btn=el('button','x',b.photo_url?'Change photo':'Add photo');btn.style.color='var(--gold)';btn.onclick=function(){f.click()};
+f.onchange=async function(){if(!f.files[0])return;btn.textContent='Uploading…';btn.disabled=true;try{b.photo_url=await uploadPhoto(b,f.files[0]);render()}catch(x){alert('Upload failed. Please try again.')}loadBarbers()};
+row.appendChild(L);row.appendChild(btn);row.appendChild(f);l.appendChild(row)})}
+function showPanel(on){$('login').classList.toggle('hide',on);$('panel').classList.toggle('hide',!on);if(on){loadBookings();loadBarbers()}}
+$('in').onclick=async function(){$('lerr').textContent='';var r=await sb.auth.signInWithPassword({email:$('em').value.trim(),password:$('pw').value});if(r.error)$('lerr').textContent='Wrong email or password.';else showPanel(true)};
+$('out').onclick=async function(){await sb.auth.signOut();showPanel(false)};
+
+/* ---------- SWITCH VIEWS ---------- */
+var inOwner=false;
+function view(o){inOwner=o;$('client').classList.toggle('hide',o);$('owner').classList.toggle('hide',!o);$('swap').textContent=o?'← Back to booking':'Owner login';if(o)sb.auth.getSession().then(function(r){showPanel(!!(r.data&&r.data.session))})}
+$('swap').onclick=function(){view(!inOwner)};
+
+(async function(){
+try{
+var a=await sb.from('shops').select('*').limit(1);var b=await sb.from('barbers').select('*').order('name');var c=await sb.from('services').select('*').order('minutes');
+if(a.error||!a.data.length)throw 0;
+shop=a.data[0];barbers=b.data||[];services=c.data||[];await loadTaken();
+$('load').classList.add('hide');$('app').classList.remove('hide');render()
+}catch(x){$('load').textContent='Could not load. Please refresh.'}
+})();
+</script>
+</body>
+</html>
